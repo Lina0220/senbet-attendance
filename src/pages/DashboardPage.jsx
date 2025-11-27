@@ -1,3 +1,5 @@
+
+
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { CLASS_CORRIDOR } from '../data/classConfig';
@@ -32,6 +34,10 @@ const DashboardPage = () => {
   const [editDraft, setEditDraft] = useState(null);
   const [toast, setToast] = useState('');
   const [exportSheetName, setExportSheetName] = useState('attendance');
+  const [reportDateFrom, setReportDateFrom] = useState('');
+  const [reportDateTo, setReportDateTo] = useState('');
+  // <CHANGE> Add state for viewing search result details
+  const [selectedSearchStudent, setSelectedSearchStudent] = useState(null);
 
   const fetchStudents = useCallback(async () => {
     const { data, error } = await supabase
@@ -248,91 +254,144 @@ const DashboardPage = () => {
   };
 
   return (
-    <div className="dashboard-page">
-      <header className="dashboard-header card">
-        <div>
-          <h1 className="dashboard-title-am">
-            የፍኖተ ሎዛ ቅድስት ማርያም ቤተ ክርስቲያን መራሔ ጽድቅ ሰንበት ትምህርት ቤት
-          </h1>
-        </div>
-        <div className="header-controls header-controls-stacked">
-          <input
-            className="search-input search-input-wide"
-            placeholder="Search by name, roll, or phone"
-            value={searchTerm}
-            onChange={(evt) => setSearchTerm(evt.target.value)}
-          />
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(evt) => setSelectedDate(evt.target.value)}
-            className="date-input"
-          />
-        </div>
+    <div style={styles.container}>
+      <header style={styles.header}>
+        <h1 style={styles.title}>
+          {/* <CHANGE> Updated header text */}
+          የፍኖተ ሎዛ ቅድስት ማርያም ቤተ ክርስቲያን መራሔ ጽድቅ ሰንበት ትምህርት ቤት አቴንዳንስ
+        </h1>
       </header>
 
+      <div style={styles.toolbar}>
+        <input
+          type="text"
+          placeholder="🔍 Search by name, roll, or phone..."
+          value={searchTerm}
+          onChange={(evt) => setSearchTerm(evt.target.value)}
+          style={styles.searchInput}
+        />
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(evt) => setSelectedDate(evt.target.value)}
+          style={styles.dateInput}
+        />
+      </div>
+
+      {/* <CHANGE> Made search results clickable to show student details */}
       {globalSearchHits.length > 0 && (
-        <section className="card search-results">
-          <header>
-            <h3>Search results</h3>
-            <p>{globalSearchHits.length} matches</p>
-          </header>
-          <div className="results-grid">
-            {globalSearchHits.map((student) => {
-              const status = attendance[student.id]?.[selectedDate];
-              return (
-                <article key={student.id}>
-                  <h4>{student.name}</h4>
-                  <p>
-                    {student.rollNumber} · {resolveClassLabel(student.classId)}
-                  </p>
-                  <p>{student.phone}</p>
-                  <div className="status-buttons">
-                    {statusOptions.map((option) => (
-                      <button
-                        key={option.code}
-                        className={[
-                          'status-btn',
-                          status === option.code && 'is-selected',
-                        ]
-                          .filter(Boolean)
-                          .join(' ')}
-                        onClick={() => markAttendance(student.id, option.code)}
-                      >
-                        {option.code}
-                      </button>
-                    ))}
-                    <button
-                      className="link-btn"
-                      type="button"
-                      onClick={() => clearAttendance(student.id)}
-                    >
-                      Undo
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
+        <div style={styles.searchResults}>
+          <div style={styles.searchHeader}>
+            <strong>Search results</strong>
+            <span style={styles.badge}>{globalSearchHits.length} matches</span>
           </div>
-        </section>
+          {globalSearchHits.map((student) => {
+            const status = attendance[student.id]?.[selectedDate];
+            return (
+              <div
+                key={student.id}
+                style={styles.resultItem}
+                onClick={() => setSelectedSearchStudent(student)}
+              >
+                <div style={{ cursor: 'pointer', flex: 1 }}>
+                  <strong>{student.name}</strong>
+                  <div style={styles.meta}>
+                    {student.rollNumber} · {resolveClassLabel(student.classId)}
+                  </div>
+                  <div style={styles.meta}>{student.phone}</div>
+                </div>
+                <div style={styles.buttonGroup}>
+                  {statusOptions.map((option) => (
+                    <button
+                      key={option.code}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        markAttendance(student.id, option.code);
+                      }}
+                      style={{
+                        ...styles.button,
+                        ...(status === option.code ? styles.buttonActive : {}),
+                      }}
+                    >
+                      {option.code}
+                    </button>
+                  ))}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearAttendance(student.id);
+                    }}
+                    style={styles.buttonDanger}
+                  >
+                    Undo
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
-      <section className="actions-row">
+      {/* <CHANGE> Student details modal for clicked search results */}
+      {selectedSearchStudent && (
+        <div style={styles.modal}>
+          <div style={styles.modalContent}>
+            <div style={styles.modalHeader}>
+              <h2 style={styles.modalTitle}>Student Details</h2>
+              <button
+                onClick={() => setSelectedSearchStudent(null)}
+                style={styles.closeButton}
+              >
+                Close
+              </button>
+            </div>
+            <div style={styles.detailsBox}>
+              <div style={styles.detailRow}>
+                <strong>Roll Number:</strong> {selectedSearchStudent.rollNumber}
+              </div>
+              <div style={styles.detailRow}>
+                <strong>Name:</strong> {selectedSearchStudent.name}
+              </div>
+              <div style={styles.detailRow}>
+                <strong>Class:</strong> {resolveClassLabel(selectedSearchStudent.classId)}
+              </div>
+              <div style={styles.detailRow}>
+                <strong>Age:</strong> {selectedSearchStudent.age}
+              </div>
+              <div style={styles.detailRow}>
+                <strong>Phone:</strong> {selectedSearchStudent.phone}
+              </div>
+              <div style={styles.detailRow}>
+                <strong>Alt Phone:</strong> {selectedSearchStudent.altPhone}
+              </div>
+            </div>
+            <button
+              onClick={() => startEdit(selectedSearchStudent)}
+              style={styles.buttonPrimary}
+            >
+              Edit Student
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div style={styles.actionBar}>
         {ACTIONS.map((action) => (
           <button
             key={action.id}
-            className={['action-card', activeView === action.id && 'is-active']
-              .filter(Boolean)
-              .join(' ')}
             onClick={() => setActiveView(action.id)}
+            style={{
+              ...styles.actionButton,
+              ...(activeView === action.id ? styles.actionButtonActive : {}),
+            }}
           >
-            <span>{action.label}</span>
-            <p>{action.copy}</p>
+            <div style={styles.actionLabel}>{action.label}</div>
+            <div style={styles.actionCopy}>{action.copy}</div>
           </button>
         ))}
-      </section>
+      </div>
 
-      <main className="dashboard-content">
+      <div style={styles.content}>
         {activeView === 'classes' && (
           <ClassSection
             selectedClass={selectedClass}
@@ -345,6 +404,7 @@ const DashboardPage = () => {
             onEdit={startEdit}
             onDelete={handleStudentDelete}
             onAdd={addEmptyStudent}
+            allStudents={students}
           />
         )}
 
@@ -373,98 +433,125 @@ const DashboardPage = () => {
             attendance={attendance}
             reportClass={reportClass}
             onSelectClass={setReportClass}
+            reportDateFrom={reportDateFrom}
+            reportDateTo={reportDateTo}
+            onDateFromChange={setReportDateFrom}
+            onDateToChange={setReportDateTo}
           />
         )}
-      </main>
+      </div>
 
       {editDraft && (
-        <aside className="drawer card">
-          <form onSubmit={handleEditSubmit}>
-            <header>
-              <h3>{editDraft.name ? 'Edit student' : 'Add new student'}</h3>
+        <div style={styles.modal}>
+          <div style={styles.modalContent}>
+            <div style={styles.modalHeader}>
+              <h2 style={styles.modalTitle}>
+                {editDraft.name ? 'Edit student' : 'Add new student'}
+              </h2>
               <button
-                type="button"
-                className="link-btn"
                 onClick={() => setEditDraft(null)}
+                style={styles.closeButton}
               >
                 Close
               </button>
-            </header>
-            <label>
-              Full name
-              <input
-                name="name"
-                required
-                value={editDraft.name}
-                onChange={handleEditChange}
-                placeholder="ስም"
-              />
-            </label>
-            <label>
-              Roll number
-              <input
-                name="rollNumber"
-                type="number"
-                value={editDraft.rollNumber}
-                onChange={handleEditChange}
-              />
-            </label>
-            <label>
-              Class
-              <select
-                name="classId"
-                value={editDraft.classId}
-                onChange={handleEditChange}
-              >
-                {CLASS_CORRIDOR.map((klass) => (
-                  <option key={klass.id} value={klass.id}>
-                    {klass.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Age
-              <input
-                name="age"
-                type="number"
-                value={editDraft.age}
-                onChange={handleEditChange}
-              />
-            </label>
-            <label>
-              Phone
-              <input
-                name="phone"
-                value={editDraft.phone}
-                onChange={handleEditChange}
-              />
-            </label>
-            <label>
-              Additional phone
-              <input
-                name="altPhone"
-                value={editDraft.altPhone}
-                onChange={handleEditChange}
-              />
-            </label>
-            <footer className="drawer-actions">
-              <button type="button" className="btn btn-secondary" onClick={() => setEditDraft(null)}>
-                Cancel
-              </button>
-              <button type="submit" className="btn btn-primary">
-                Save changes
-              </button>
-            </footer>
-          </form>
-        </aside>
+            </div>
+
+            <form onSubmit={handleEditSubmit} style={styles.form}>
+              <label style={styles.label}>
+                Full name
+                <input
+                  type="text"
+                  name="name"
+                  value={editDraft.name}
+                  onChange={handleEditChange}
+                  required
+                  style={styles.input}
+                />
+              </label>
+
+              <label style={styles.label}>
+                Roll number
+                <input
+                  type="number"
+                  name="rollNumber"
+                  value={editDraft.rollNumber}
+                  onChange={handleEditChange}
+                  style={styles.input}
+                />
+              </label>
+
+              <label style={styles.label}>
+                Class
+                <select
+                  name="classId"
+                  value={editDraft.classId}
+                  onChange={handleEditChange}
+                  style={styles.input}
+                >
+                  {CLASS_CORRIDOR.map((klass) => (
+                    <option key={klass.id} value={klass.id}>
+                      {klass.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={styles.label}>
+                Age
+                <input
+                  type="number"
+                  name="age"
+                  value={editDraft.age}
+                  onChange={handleEditChange}
+                  style={styles.input}
+                />
+              </label>
+
+              <label style={styles.label}>
+                Phone
+                <input
+                  type="tel"
+                  name="phone"
+                  value={editDraft.phone}
+                  onChange={handleEditChange}
+                  style={styles.input}
+                />
+              </label>
+
+              <label style={styles.label}>
+                Additional phone
+                <input
+                  type="tel"
+                  name="altPhone"
+                  value={editDraft.altPhone}
+                  onChange={handleEditChange}
+                  style={styles.input}
+                />
+              </label>
+
+              <div style={styles.buttonGroup}>
+                <button
+                  type="button"
+                  onClick={() => setEditDraft(null)}
+                  style={styles.buttonSecondary}
+                >
+                  Cancel
+                </button>
+                <button type="submit" style={styles.buttonPrimary}>
+                  Save changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
-      {toast && <div className="toast card">{toast}</div>}
+      {toast && <div style={styles.toast}>{toast}</div>}
     </div>
   );
 };
 
+// <CHANGE> Updated ClassSection with drag-and-drop reordering and class list download
 const ClassSection = ({
   selectedClass,
   onSelectClass,
@@ -476,114 +563,227 @@ const ClassSection = ({
   onEdit,
   onDelete,
   onAdd,
+  allStudents,
 }) => {
   const [query, setQuery] = useState('');
+  const [classStudents, setClassStudents] = useState([]);
+  const [draggedStudent, setDraggedStudent] = useState(null);
+
+  useEffect(() => {
+    setClassStudents(students);
+  }, [students]);
 
   const visibleStudents = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
-    if (!trimmed) return students;
-    return students.filter((student) => {
+    if (!trimmed) return classStudents;
+    return classStudents.filter((student) => {
       const haystack = `${student.rollNumber} ${student.name} ${student.phone} ${student.altPhone}`.toLowerCase();
       return haystack.includes(trimmed);
     });
-  }, [students, query]);
+  }, [classStudents, query]);
+
+  // <CHANGE> Drag-and-drop functions for reordering
+  const handleDragStart = (index) => {
+    setDraggedStudent(index);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (index) => {
+    if (draggedStudent === null || draggedStudent === index) return;
+    const newList = [...classStudents];
+    const [draggedItem] = newList.splice(draggedStudent, 1);
+    newList.splice(index, 0, draggedItem);
+    setClassStudents(newList);
+    setDraggedStudent(null);
+  };
+
+  const deleteAllStudents = () => {
+    if (!window.confirm('Are you sure you want to delete ALL students in this class? This action cannot be undone.')) {
+      return;
+    }
+    classStudents.forEach((student) => onDelete(student.id));
+    setClassStudents([]);
+  };
+
+  // <CHANGE> Download class list as PDF/Excel
+  const downloadClassList = (format) => {
+    if (format === 'excel') {
+      const rows = classStudents.map((student) => ({
+        Roll: student.rollNumber,
+        Name: student.name,
+        Age: student.age,
+        Phone: student.phone,
+        'Alt Phone': student.altPhone,
+        Class: resolveClassLabel(student.classId),
+      }));
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        wb,
+        sheet,
+        resolveClassLabel(selectedClass),
+      );
+      XLSX.writeFile(wb, `class-list-${selectedClass}.xlsx`);
+    } else if (format === 'pdf') {
+      window.print();
+    }
+  };
 
   return (
-    <section className="card class-section">
-      <div className="class-grid">
+    <div style={styles.section}>
+      <div style={styles.classGrid}>
         {CLASS_CORRIDOR.map((klass) => {
           const isActive = klass.id === selectedClass;
           return (
             <button
               key={klass.id}
-              className={['class-chip', isActive && 'is-active'].filter(Boolean).join(' ')}
               onClick={() => onSelectClass(isActive ? null : klass.id)}
+              style={{
+                ...styles.classButton,
+                ...(isActive ? styles.classButtonActive : {}),
+              }}
             >
-              <strong>{klass.label}</strong>
-              <span>{klass.description}</span>
+              <div style={styles.classLabel}>{klass.label}</div>
+              <div style={styles.classDesc}>{klass.description}</div>
             </button>
           );
         })}
-        <button className="class-chip add-chip" onClick={onAdd}>
-          + Add student
-        </button>
       </div>
+
+      <button onClick={onAdd} style={styles.addButton}>
+        + Add student
+      </button>
 
       {selectedClass && (
         <>
-          <div className="class-search-row">
-            <input
-              className="search-input"
-              placeholder="Search student, roll, phone"
-              value={query}
-              onChange={(evt) => setQuery(evt.target.value)}
-            />
-          </div>
+          <input
+            type="text"
+            placeholder="Filter by name, roll, or phone..."
+            value={query}
+            onChange={(evt) => setQuery(evt.target.value)}
+            style={styles.searchInput}
+          />
 
-          <div className="table-wrapper">
-            <table>
-              <tbody>
-                {visibleStudents.map((student) => {
-                  const status = attendance[student.id]?.[selectedDate];
-                  return (
-                    <tr key={student.id}>
-                      <td>{student.rollNumber}</td>
-                      <td>{student.name}</td>
-                      <td>{student.age}</td>
-                      <td>
-                        <span>{student.phone}</span>
-                        <small>{student.altPhone}</small>
-                      </td>
-                      <td>
-                        <div className="status-buttons">
-                          {statusOptions.map((option) => (
-                            <button
-                              key={option.code}
-                              className={[
-                                'status-btn',
-                                status === option.code && 'is-selected',
-                              ]
-                                .filter(Boolean)
-                                .join(' ')}
-                              onClick={() => onMark(student.id, option.code)}
-                            >
-                              {option.code}
-                            </button>
-                          ))}
+          {/* <CHANGE> Added download buttons for class list */}
+          {classStudents.length > 0 && (
+            <div style={styles.downloadButtonGroup}>
+              <button
+                onClick={() => downloadClassList('excel')}
+                style={styles.buttonSecondary}
+              >
+                Download as Excel
+              </button>
+              <button
+                onClick={() => downloadClassList('pdf')}
+                style={styles.buttonSecondary}
+              >
+                Download as PDF
+              </button>
+            </div>
+          )}
+
+          <table style={styles.table}>
+            <thead>
+              <tr style={styles.tableHeader}>
+                <th style={styles.th}>Roll</th>
+                <th style={styles.th}>Name</th>
+                <th style={styles.th}>Age</th>
+                <th style={styles.th}>Phones</th>
+                <th style={styles.th}>Attendance</th>
+                <th style={styles.th}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleStudents.map((student, idx) => {
+                const status = attendance[student.id]?.[selectedDate];
+                return (
+                  <tr
+                    key={student.id}
+                    style={{
+                      ...styles.tableRow,
+                      ...(draggedStudent === idx ? { opacity: 0.5 } : {}),
+                    }}
+                    draggable
+                    onDragStart={() => handleDragStart(idx)}
+                    onDragOver={handleDragOver}
+                    onDrop={() => handleDrop(idx)}
+                  >
+                    <td style={styles.td}>{student.rollNumber}</td>
+                    {/* <CHANGE> Made student name draggable for reordering */}
+                    <td
+                      style={{
+                        ...styles.td,
+                        cursor: 'grab',
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      {student.name}
+                    </td>
+                    <td style={styles.td}>{student.age}</td>
+                    <td style={styles.td}>
+                      <div>{student.phone}</div>
+                      {student.altPhone && <div>{student.altPhone}</div>}
+                    </td>
+                    <td style={styles.td}>
+                      <div style={styles.buttonGroup}>
+                        {statusOptions.map((option) => (
                           <button
-                            className="link-btn"
-                            type="button"
-                            onClick={() => onClear(student.id)}
+                            key={option.code}
+                            onClick={() => onMark(student.id, option.code)}
+                            style={{
+                              ...styles.button,
+                              ...(status === option.code ? styles.buttonActive : {}),
+                            }}
                           >
-                            Undo
+                            {option.code}
                           </button>
-                        </div>
-                      </td>
-                      <td>
+                        ))}
                         <button
-                          className="link-btn"
-                          type="button"
+                          onClick={() => onClear(student.id)}
+                          style={styles.buttonDanger}
+                        >
+                          Undo
+                        </button>
+                      </div>
+                    </td>
+                    <td style={styles.td}>
+                      <div style={styles.buttonGroup}>
+                        <button
                           onClick={() => onEdit(student)}
+                          style={styles.buttonSecondary}
                         >
                           Edit
                         </button>
                         <button
-                          className="link-btn danger"
-                          type="button"
                           onClick={() => onDelete(student.id)}
+                          style={styles.buttonDanger}
                         >
                           Remove
                         </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {classStudents.length > 0 && (
+            <div style={styles.deleteAllContainer}>
+              <button
+                onClick={deleteAllStudents}
+                style={styles.buttonDeleteAll}
+              >
+                Delete all students in this class
+              </button>
+            </div>
+          )}
         </>
       )}
-    </section>
+    </div>
   );
 };
 
@@ -595,70 +795,78 @@ const UploadSection = ({
   onSelectClass,
   onFile,
 }) => (
-  <section className="card upload-section">
-    <header>
-      <h3>Excel upload</h3>
-      <p>
-        Preview parsed rows before saving to Supabase. Destination class:{' '}
-        <strong>{resolveClassLabel(uploadClass)}</strong>
-      </p>
-    </header>
-    <div className="upload-controls-row">
-      <select
-        className="class-select"
-        value={uploadClass}
-        onChange={(evt) => onSelectClass(evt.target.value)}
-      >
-        {CLASS_CORRIDOR.map((klass) => (
-          <option key={klass.id} value={klass.id}>
-            Upload to {klass.label}
-          </option>
-        ))}
-      </select>
-      <label className="upload-chip">
+  <div style={styles.section}>
+    <h2 style={styles.sectionTitle}>Excel upload</h2>
+    <p>
+      Preview parsed rows before saving to Supabase. Destination class:{' '}
+      <strong>{resolveClassLabel(uploadClass)}</strong>
+    </p>
+
+    <div style={styles.formGroup}>
+      <label>
+        Upload to class:
+        <select
+          value={uploadClass}
+          onChange={(evt) => onSelectClass(evt.target.value)}
+          style={styles.input}
+        >
+          {CLASS_CORRIDOR.map((klass) => (
+            <option key={klass.id} value={klass.id}>
+              Upload to {klass.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label>
         Upload Excel
-        <input type="file" accept=".xls,.xlsx" onChange={onFile} />
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          onChange={onFile}
+          style={styles.input}
+        />
       </label>
     </div>
+
     {preview.length > 0 && (
       <>
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Roll</th>
-                <th>Name</th>
-                <th>Class</th>
-                <th>Age</th>
-                <th>Phone</th>
-                <th>Alt phone</th>
+        <table style={styles.table}>
+          <thead>
+            <tr style={styles.tableHeader}>
+              <th style={styles.th}>Roll</th>
+              <th style={styles.th}>Name</th>
+              <th style={styles.th}>Class</th>
+              <th style={styles.th}>Age</th>
+              <th style={styles.th}>Phone</th>
+              <th style={styles.th}>Alt phone</th>
+            </tr>
+          </thead>
+          <tbody>
+            {preview.map((student) => (
+              <tr key={student.id} style={styles.tableRow}>
+                <td style={styles.td}>{student.rollNumber}</td>
+                <td style={styles.td}>{student.name}</td>
+                <td style={styles.td}>{resolveClassLabel(student.classId)}</td>
+                <td style={styles.td}>{student.age}</td>
+                <td style={styles.td}>{student.phone}</td>
+                <td style={styles.td}>{student.altPhone}</td>
               </tr>
-            </thead>
-            <tbody>
-              {preview.map((student) => (
-                <tr key={student.id}>
-                  <td>{student.rollNumber}</td>
-                  <td>{student.name}</td>
-                  <td>{resolveClassLabel(student.classId)}</td>
-                  <td>{student.age}</td>
-                  <td>{student.phone}</td>
-                  <td>{student.altPhone}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <footer className="upload-actions">
-          <button className="btn btn-secondary" onClick={onDiscard}>
+            ))}
+          </tbody>
+        </table>
+
+        <div style={styles.buttonGroup}>
+          <button onClick={onDiscard} style={styles.buttonSecondary}>
             Discard
           </button>
-          <button className="btn btn-primary" onClick={onCommit}>
+          <button onClick={onCommit} style={styles.buttonPrimary}>
             Save to roster
           </button>
-        </footer>
+        </div>
       </>
     )}
-  </section>
+  </div>
 );
 
 const HistorySection = ({ historyClass, onSelectClass, historyRows }) => {
@@ -680,74 +888,75 @@ const HistorySection = ({ historyClass, onSelectClass, historyRows }) => {
   }, [historyRows, query]);
 
   return (
-    <section className="card history-section">
-      <header className="history-header">
-        <div>
-          <h3>Attendance history</h3>
-          <p>Choose a class and search by student, roll, or phone.</p>
-        </div>
-        <div className="header-controls">
-          <select
-            value={historyClass}
-            onChange={(evt) => onSelectClass(evt.target.value)}
-          >
-            {CLASS_CORRIDOR.map((klass) => (
-              <option key={klass.id} value={klass.id}>
-                {klass.label}
-              </option>
-            ))}
-          </select>
-          <input
-            className="search-input"
-            placeholder="Search student, roll, phone"
-            value={query}
-            onChange={(evt) => setQuery(evt.target.value)}
-          />
-        </div>
-      </header>
+    <div style={styles.section}>
+      <h2 style={styles.sectionTitle}>Attendance history</h2>
+      <p>Choose a class and search by student, roll, or phone.</p>
+
+      <label style={styles.label}>
+        Class:
+        <select
+          value={historyClass}
+          onChange={(evt) => onSelectClass(evt.target.value)}
+          style={styles.input}
+        >
+          {CLASS_CORRIDOR.map((klass) => (
+            <option key={klass.id} value={klass.id}>
+              {klass.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <input
+        type="text"
+        placeholder="Search by name, roll, or phone..."
+        value={query}
+        onChange={(evt) => setQuery(evt.target.value)}
+        style={styles.searchInput}
+      />
+
       {filteredRows.length === 0 ? (
-        <p className="muted">No students in this class yet.</p>
+        <p>No students in this class yet.</p>
       ) : allDates.length === 0 ? (
-        <p className="muted">No attendance has been recorded yet.</p>
+        <p>No attendance has been recorded yet.</p>
       ) : (
         <>
-          <div className="section-toolbar">
-            <button
-              type="button"
-              className="download-button"
-              onClick={() => setShowExport((prev) => !prev)}
-            >
-              ⬇
-            </button>
-            {showExport && (
-              <div className="download-menu">
-                <button
-                  type="button"
-                  className="download-chip"
-                  onClick={() => window.print()}
-                >
-                  PDF
-                </button>
-                <button
-                  type="button"
-                  className="download-chip"
-                  onClick={() =>
-                    exportHistoryExcel(filteredRows, historyClass, allDates)
-                  }
-                >
-                  Excel
-                </button>
-              </div>
-            )}
-          </div>
-          <div className="table-wrapper history-table">
-            <table>
+          <button
+            onClick={() => setShowExport((prev) => !prev)}
+            style={styles.buttonSecondary}
+          >
+            Export
+          </button>
+
+          {showExport && (
+            <div style={styles.buttonGroup}>
+              <button
+                onClick={() => window.print()}
+                style={styles.buttonSecondary}
+              >
+                PDF
+              </button>
+              <button
+                onClick={() =>
+                  exportHistoryExcel(filteredRows, historyClass, allDates)
+                }
+                style={styles.buttonSecondary}
+              >
+                Excel
+              </button>
+            </div>
+          )}
+
+          <div style={styles.tableContainer}>
+            <table style={styles.table}>
               <thead>
-                <tr>
-                  <th>Student</th>
-                  <th>Phones</th>
+                <tr style={styles.tableHeader}>
+                  <th style={styles.th}>Student</th>
+                  <th style={styles.th}>Phones</th>
                   {allDates.map((date) => (
-                    <th key={date}>{humanDate(date)}</th>
+                    <th key={date} style={styles.th}>
+                      {humanDate(date)}
+                    </th>
                   ))}
                 </tr>
               </thead>
@@ -755,16 +964,16 @@ const HistorySection = ({ historyClass, onSelectClass, historyRows }) => {
                 {filteredRows.map(({ student, records }) => {
                   const recordMap = Object.fromEntries(records);
                   return (
-                    <tr key={student.id}>
-                      <td>
-                        {student.rollNumber}. {student.name}
+                    <tr key={student.id} style={styles.tableRow}>
+                      <td style={styles.td}>
+                        <strong>{student.rollNumber}. {student.name}</strong>
                       </td>
-                      <td>
-                        <span>{student.phone}</span>
-                        {student.altPhone && <small>{student.altPhone}</small>}
+                      <td style={styles.td}>
+                        <div>{student.phone}</div>
+                        {student.altPhone && <div>{student.altPhone}</div>}
                       </td>
                       {allDates.map((date) => (
-                        <td key={date} className="history-cell">
+                        <td key={date} style={styles.td}>
                           {recordMap[date] || '—'}
                         </td>
                       ))}
@@ -776,31 +985,47 @@ const HistorySection = ({ historyClass, onSelectClass, historyRows }) => {
           </div>
         </>
       )}
-    </section>
+    </div>
   );
 };
 
-const ReportsSection = ({ students, attendance, reportClass, onSelectClass }) => {
+const ReportsSection = ({
+  students,
+  attendance,
+  reportClass,
+  onSelectClass,
+  reportDateFrom,
+  reportDateTo,
+  onDateFromChange,
+  onDateToChange,
+}) => {
   const [focusedTab, setFocusedTab] = useState('summary');
   const [showExport, setShowExport] = useState(false);
-  const report = useMemo(
-    () => buildClassReport(students, attendance, reportClass),
-    [students, attendance, reportClass],
-  );
+
+  const report = useMemo(() => {
+    return buildClassReport(
+      students,
+      attendance,
+      reportClass,
+      reportDateFrom,
+      reportDateTo
+    );
+  }, [students, attendance, reportClass, reportDateFrom, reportDateTo]);
 
   return (
-    <section className="card reports-section">
-      <header>
-        <div>
-          <h3>Class reports</h3>
-          <p>
-            Overview of presence, absence, and permission for{' '}
-            <strong>{resolveClassLabel(reportClass)}</strong>.
-          </p>
-        </div>
+    <div style={styles.section}>
+      <h2 style={styles.sectionTitle}>Class reports</h2>
+      <p>
+        Overview of presence, absence, and permission for{' '}
+        <strong>{resolveClassLabel(reportClass)}</strong>.
+      </p>
+
+      <label style={styles.label}>
+        Class:
         <select
           value={reportClass}
           onChange={(evt) => onSelectClass(evt.target.value)}
+          style={styles.input}
         >
           {CLASS_CORRIDOR.map((klass) => (
             <option key={klass.id} value={klass.id}>
@@ -808,112 +1033,134 @@ const ReportsSection = ({ students, attendance, reportClass, onSelectClass }) =>
             </option>
           ))}
         </select>
-      </header>
+      </label>
+
+      <div style={styles.dateRangeContainer}>
+        <label style={styles.label}>
+          From:
+          <input
+            type="date"
+            value={reportDateFrom}
+            onChange={(evt) => onDateFromChange(evt.target.value)}
+            style={styles.input}
+          />
+        </label>
+        <label style={styles.label}>
+          To:
+          <input
+            type="date"
+            value={reportDateTo}
+            onChange={(evt) => onDateToChange(evt.target.value)}
+            style={styles.input}
+          />
+        </label>
+      </div>
 
       {report.totalStudentDays === 0 ? (
-        <p className="muted">
-          No attendance records yet for this class. Start marking P / A / PR in the
-          dashboard.
+        <p>
+          No attendance records yet for this class{' '}
+          {reportDateFrom || reportDateTo
+            ? `in the selected date range`
+            : ''}. Start marking P / A / PR in the dashboard.
         </p>
       ) : (
         <>
-          <div className="section-toolbar">
-            <button
-              type="button"
-              className="download-button"
-              onClick={() => setShowExport((prev) => !prev)}
-            >
-              ⬇
-            </button>
-            {showExport && (
-              <div className="download-menu">
-                <button
-                  type="button"
-                  className="download-chip"
-                  onClick={() => window.print()}
-                >
-                  PDF
-                </button>
-                <button
-                  type="button"
-                  className="download-chip"
-                  onClick={() => exportAbsentExcel(report, reportClass)}
-                >
-                  Excel
-                </button>
-              </div>
-            )}
-          </div>
+          <button
+            onClick={() => setShowExport((prev) => !prev)}
+            style={styles.buttonSecondary}
+          >
+            Export
+          </button>
 
-          <div className="report-summary">
+          {showExport && (
+            <div style={styles.buttonGroup}>
+              <button
+                onClick={() => window.print()}
+                style={styles.buttonSecondary}
+              >
+                PDF
+              </button>
+              <button
+                onClick={() => exportAbsentExcel(report, reportClass)}
+                style={styles.buttonSecondary}
+              >
+                Excel
+              </button>
+            </div>
+          )}
+
+          <div style={styles.statsBox}>
             <p>
               <strong>{report.uniqueDays}</strong> days of attendance taken for{' '}
               <strong>{report.rosterSize}</strong> students (
-              {report.totalStudentDays} records).
+              <strong>{report.totalStudentDays}</strong> records){' '}
+              {reportDateFrom || reportDateTo ? 'in selected date range' : ''}
             </p>
-            <div className="report-badges">
-              <span>
-                Present: {report.counts.P} ({report.percentages.P}%)
-              </span>
-              <span>
-                Permission: {report.counts.PR} ({report.percentages.PR}%)
-              </span>
-              <button
-                type="button"
-                className={[
-                  'link-pill',
-                  focusedTab === 'absent' && 'link-pill-active',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                onClick={() => setFocusedTab('absent')}
-              >
-                Absent: {report.counts.A} ({report.percentages.A}%)
-              </button>
+          </div>
+
+          <div style={styles.statsGrid}>
+            <div style={styles.stat}>
+              <div style={styles.statLabel}>Present</div>
+              <div style={styles.statValue}>
+                {report.counts.P} ({report.percentages.P}%)
+              </div>
             </div>
+            <div style={styles.stat}>
+              <div style={styles.statLabel}>Permission</div>
+              <div style={styles.statValue}>
+                {report.counts.PR} ({report.percentages.PR}%)
+              </div>
+            </div>
+            <button
+              onClick={() => setFocusedTab('absent')}
+              style={{...styles.stat, cursor: 'pointer'}}
+            >
+              <div style={styles.statLabel}>Absent</div>
+              <div style={styles.statValue}>
+                {report.counts.A} ({report.percentages.A}%)
+              </div>
+            </button>
           </div>
 
           {focusedTab === 'absent' && (
-            <div className="report-detail">
-              <h4>Absent students</h4>
+            <div style={styles.absentSection}>
+              <h3 style={styles.subTitle}>Absent students</h3>
               {report.absentDetails.length === 0 ? (
-                <p className="muted">No absences recorded yet.</p>
+                <p>No absences recorded yet.</p>
               ) : (
-                <div className="table-wrapper">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Roll</th>
-                        <th>Student</th>
-                        <th>Phones</th>
-                        <th>Days absent</th>
+                <table style={styles.table}>
+                  <thead>
+                    <tr style={styles.tableHeader}>
+                      <th style={styles.th}>Roll</th>
+                      <th style={styles.th}>Student</th>
+                      <th style={styles.th}>Phones</th>
+                      <th style={styles.th}>Days absent</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.absentDetails.map((item) => (
+                      <tr key={item.student.id} style={styles.tableRow}>
+                        <td style={styles.td}>{item.student.rollNumber}</td>
+                        <td style={styles.td}>{item.student.name}</td>
+                        <td style={styles.td}>
+                          <div>{item.student.phone}</div>
+                          {item.student.altPhone && (
+                            <div>{item.student.altPhone}</div>
+                          )}
+                        </td>
+                        <td style={styles.td}>
+                          {item.dates.map((date) => humanDate(date)).join(', ')}
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {report.absentDetails.map((item) => (
-                        <tr key={item.student.id}>
-                          <td>{item.student.rollNumber}</td>
-                          <td>{item.student.name}</td>
-                          <td>
-                            <span>{item.student.phone}</span>
-                            {item.student.altPhone && (
-                              <small>{item.student.altPhone}</small>
-                            )}
-                          </td>
-                          <td>
-                            {item.dates.map((date) => humanDate(date)).join(', ')}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
           )}
         </>
       )}
-    </section>
+    </div>
   );
 };
 
@@ -992,7 +1239,13 @@ const removeAttendanceLocal = (state, studentId, date) => {
   return nextState;
 };
 
-const buildClassReport = (students, attendance, classId) => {
+const buildClassReport = (
+  students,
+  attendance,
+  classId,
+  dateFrom = '',
+  dateTo = ''
+) => {
   const roster = students.filter((student) => student.classId === classId);
   const counts = { P: 0, A: 0, PR: 0 };
   const dateSet = new Set();
@@ -1001,6 +1254,9 @@ const buildClassReport = (students, attendance, classId) => {
   roster.forEach((student) => {
     const records = attendance[student.id] || {};
     Object.entries(records).forEach(([date, status]) => {
+      if (dateFrom && date < dateFrom) return;
+      if (dateTo && date > dateTo) return;
+
       if (!status) return;
       dateSet.add(date);
       if (counts[status] !== undefined) counts[status] += 1;
@@ -1077,5 +1333,392 @@ const exportAbsentExcel = (report, classId) => {
   XLSX.writeFile(wb, `absent-${classId || 'class'}.xlsx`);
 };
 
-export default DashboardPage;
+// Basic styles
+const styles = {
+  container: {
+    maxWidth: '1200px',
+    margin: '0 auto',
+    padding: '20px',
+    fontFamily: 'Arial, sans-serif',
+  },
+  header: {
+    textAlign: 'center',
+    marginBottom: '20px',
+  },
+  title: {
+    fontSize: '20px',
+    fontWeight: 'bold',
+    margin: '0 0 5px 0',
+  },
+  subtitle: {
+    fontSize: '14px',
+    color: '#666',
+    margin: '0',
+  },
+  toolbar: {
+    display: 'flex',
+    gap: '10px',
+    marginBottom: '20px',
+  },
+  searchInput: {
+    flex: 1,
+    padding: '10px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+  },
+  dateInput: {
+    padding: '10px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+  },
+  searchResults: {
+    backgroundColor: '#f9f9f9',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    padding: '15px',
+    marginBottom: '20px',
+  },
+  searchHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '10px',
+  },
+  badge: {
+    backgroundColor: '#e3f2fd',
+    color: '#1976d2',
+    padding: '4px 8px',
+    borderRadius: '12px',
+    fontSize: '12px',
+    fontWeight: 'bold',
+  },
+  resultItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '10px',
+    borderBottom: '1px solid #eee',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+  },
+  meta: {
+    fontSize: '12px',
+    color: '#999',
+    marginTop: '4px',
+  },
+  buttonGroup: {
+    display: 'flex',
+    gap: '5px',
+  },
+  downloadButtonGroup: {
+    display: 'flex',
+    gap: '10px',
+    marginBottom: '15px',
+  },
+  button: {
+    padding: '6px 10px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    backgroundColor: '#fff',
+    fontSize: '12px',
+  },
+  buttonActive: {
+    backgroundColor: '#4caf50',
+    color: '#fff',
+    borderColor: '#4caf50',
+  },
+  buttonDanger: {
+    padding: '6px 10px',
+    border: '1px solid #ff6b6b',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    backgroundColor: '#fff',
+    color: '#ff6b6b',
+    fontSize: '12px',
+  },
+  buttonSmall: {
+    padding: '4px 8px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    backgroundColor: '#fff',
+    fontSize: '12px',
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+    cursor: 'not-allowed',
+  },
+  buttonPrimary: {
+    padding: '10px 20px',
+    border: 'none',
+    borderRadius: '4px',
+    backgroundColor: '#4caf50',
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 'bold',
+  },
+  buttonSecondary: {
+    padding: '10px 20px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    backgroundColor: '#fff',
+    cursor: 'pointer',
+    fontSize: '14px',
+  },
+  buttonDeleteAll: {
+    padding: '12px 20px',
+    border: '2px solid #ff6b6b',
+    borderRadius: '4px',
+    backgroundColor: '#fff3f3',
+    color: '#ff6b6b',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    marginTop: '20px',
+  },
+  deleteAllContainer: {
+    textAlign: 'center',
+    padding: '20px 0',
+    borderTop: '1px solid #eee',
+  },
+  actionBar: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+    gap: '10px',
+    marginBottom: '20px',
+  },
+  actionButton: {
+    padding: '15px',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    backgroundColor: '#fff',
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  actionButtonActive: {
+    backgroundColor: '#1976d2',
+    color: '#fff',
+    borderColor: '#1976d2',
+  },
+  actionLabel: {
+    fontWeight: 'bold',
+    fontSize: '14px',
+  },
+  actionCopy: {
+    fontSize: '12px',
+    marginTop: '5px',
+    opacity: 0.7,
+  },
+  content: {
+    backgroundColor: '#fff',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    padding: '20px',
+  },
+  section: {
+    marginTop: '20px',
+  },
+  sectionTitle: {
+    fontSize: '18px',
+    fontWeight: 'bold',
+    marginBottom: '10px',
+  },
+  subTitle: {
+    fontSize: '16px',
+    fontWeight: 'bold',
+    marginBottom: '10px',
+  },
+  classGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+    gap: '10px',
+    marginBottom: '20px',
+  },
+  classButton: {
+    padding: '15px',
+    border: '2px solid #ddd',
+    borderRadius: '8px',
+    backgroundColor: '#fff',
+    cursor: 'pointer',
+    textAlign: 'center',
+  },
+  classButtonActive: {
+    backgroundColor: '#1976d2',
+    color: '#fff',
+    borderColor: '#1976d2',
+  },
+  classLabel: {
+    fontWeight: 'bold',
+    fontSize: '16px',
+  },
+  classDesc: {
+    fontSize: '12px',
+    marginTop: '5px',
+    opacity: 0.7,
+  },
+  addButton: {
+    padding: '10px 20px',
+    border: '2px dashed #1976d2',
+    borderRadius: '4px',
+    backgroundColor: '#fff',
+    color: '#1976d2',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    marginBottom: '20px',
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    marginTop: '15px',
+  },
+  tableContainer: {
+    overflowX: 'auto',
+    marginTop: '15px',
+  },
+  tableHeader: {
+    backgroundColor: '#f5f5f5',
+  },
+  th: {
+    padding: '10px',
+    textAlign: 'left',
+    fontWeight: 'bold',
+    borderBottom: '2px solid #ddd',
+    fontSize: '12px',
+  },
+  tableRow: {
+    borderBottom: '1px solid #eee',
+  },
+  td: {
+    padding: '10px',
+    fontSize: '12px',
+  },
+  label: {
+    display: 'block',
+    marginBottom: '10px',
+    fontSize: '14px',
+    fontWeight: 'bold',
+  },
+  input: {
+    width: '100%',
+    padding: '8px',
+    marginTop: '5px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    fontSize: '14px',
+  },
+  formGroup: {
+    marginBottom: '20px',
+  },
+  dateRangeContainer: {
+    display: 'flex',
+    gap: '20px',
+    marginBottom: '20px',
+  },
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '15px',
+  },
+  modal: {
+    position: 'fixed',
+    top: '0',
+    left: '0',
+    right: '0',
+    bottom: '0',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: '1000',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: '8px',
+    padding: '20px',
+    maxWidth: '500px',
+    width: '90%',
+    maxHeight: '80vh',
+    overflowY: 'auto',
+  },
+  modalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '20px',
+  },
+  modalTitle: {
+    fontSize: '18px',
+    fontWeight: 'bold',
+    margin: '0',
+  },
+  closeButton: {
+    padding: '6px 10px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    backgroundColor: '#fff',
+    cursor: 'pointer',
+    fontSize: '12px',
+  },
+  detailsBox: {
+    backgroundColor: '#f9f9f9',
+    padding: '15px',
+    borderRadius: '4px',
+    marginBottom: '15px',
+  },
+  detailRow: {
+    padding: '8px 0',
+    borderBottom: '1px solid #eee',
+  },
+  statsBox: {
+    backgroundColor: '#f9f9f9',
+    padding: '15px',
+    borderRadius: '4px',
+    marginTop: '15px',
+    marginBottom: '15px',
+  },
+  statsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+    gap: '10px',
+    marginTop: '15px',
+  },
+  stat: {
+    backgroundColor: '#f9f9f9',
+    padding: '15px',
+    borderRadius: '4px',
+    textAlign: 'center',
+    border: '1px solid #ddd',
+  },
+  statLabel: {
+    fontSize: '12px',
+    fontWeight: 'bold',
+    color: '#666',
+  },
+  statValue: {
+    fontSize: '20px',
+    fontWeight: 'bold',
+    marginTop: '5px',
+  },
+  absentSection: {
+    marginTop: '20px',
+    padding: '15px',
+    backgroundColor: '#f9f9f9',
+    borderRadius: '4px',
+  },
+  toast: {
+    position: 'fixed',
+    bottom: '20px',
+    right: '20px',
+    backgroundColor: '#4caf50',
+    color: '#fff',
+    padding: '15px 20px',
+    borderRadius: '4px',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+    zIndex: '2000',
+  },
+};
 
+export default DashboardPage;
