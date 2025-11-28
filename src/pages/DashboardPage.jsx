@@ -1,5 +1,3 @@
-
-
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { CLASS_CORRIDOR } from '../data/classConfig';
@@ -14,7 +12,6 @@ const ACTIONS = [
 
 const statusOptions = [
   { code: 'P', label: 'Present' },
-  { code: 'A', label: 'Absent' },
   { code: 'PR', label: 'Permission' },
 ];
 
@@ -36,7 +33,6 @@ const DashboardPage = () => {
   const [exportSheetName, setExportSheetName] = useState('attendance');
   const [reportDateFrom, setReportDateFrom] = useState('');
   const [reportDateTo, setReportDateTo] = useState('');
-  // <CHANGE> Add state for viewing search result details
   const [selectedSearchStudent, setSelectedSearchStudent] = useState(null);
 
   const fetchStudents = useCallback(async () => {
@@ -257,7 +253,6 @@ const DashboardPage = () => {
     <div style={styles.container}>
       <header style={styles.header}>
         <h1 style={styles.title}>
-          {/* <CHANGE> Updated header text */}
           የፍኖተ ሎዛ ቅድስት ማርያም ቤተ ክርስቲያን መራሔ ጽድቅ ሰንበት ትምህርት ቤት አቴንዳንስ
         </h1>
       </header>
@@ -278,7 +273,6 @@ const DashboardPage = () => {
         />
       </div>
 
-      {/* <CHANGE> Made search results clickable to show student details */}
       {globalSearchHits.length > 0 && (
         <div style={styles.searchResults}>
           <div style={styles.searchHeader}>
@@ -332,7 +326,6 @@ const DashboardPage = () => {
         </div>
       )}
 
-      {/* <CHANGE> Student details modal for clicked search results */}
       {selectedSearchStudent && (
         <div style={styles.modal}>
           <div style={styles.modalContent}>
@@ -551,7 +544,6 @@ const DashboardPage = () => {
   );
 };
 
-// <CHANGE> Updated ClassSection with drag-and-drop reordering and class list download
 const ClassSection = ({
   selectedClass,
   onSelectClass,
@@ -582,7 +574,6 @@ const ClassSection = ({
     });
   }, [classStudents, query]);
 
-  // <CHANGE> Drag-and-drop functions for reordering
   const handleDragStart = (index) => {
     setDraggedStudent(index);
   };
@@ -608,7 +599,6 @@ const ClassSection = ({
     setClassStudents([]);
   };
 
-  // <CHANGE> Download class list as PDF/Excel
   const downloadClassList = (format) => {
     if (format === 'excel') {
       const rows = classStudents.map((student) => ({
@@ -617,7 +607,7 @@ const ClassSection = ({
         Age: student.age,
         Phone: student.phone,
         'Alt Phone': student.altPhone,
-        Class: resolveClassLabel(student.classId),
+        Class: resolveClassLabel(selectedClass),
       }));
       const sheet = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
@@ -667,7 +657,6 @@ const ClassSection = ({
             style={styles.searchInput}
           />
 
-          {/* <CHANGE> Added download buttons for class list */}
           {classStudents.length > 0 && (
             <div style={styles.downloadButtonGroup}>
               <button
@@ -712,7 +701,6 @@ const ClassSection = ({
                     onDrop={() => handleDrop(idx)}
                   >
                     <td style={styles.td}>{student.rollNumber}</td>
-                    {/* <CHANGE> Made student name draggable for reordering */}
                     <td
                       style={{
                         ...styles.td,
@@ -1061,7 +1049,7 @@ const ReportsSection = ({
           No attendance records yet for this class{' '}
           {reportDateFrom || reportDateTo
             ? `in the selected date range`
-            : ''}. Start marking P / A / PR in the dashboard.
+            : ''}. Start marking P / PR in the dashboard.
         </p>
       ) : (
         <>
@@ -1251,20 +1239,51 @@ const buildClassReport = (
   const dateSet = new Set();
   const absentDetailsMap = {};
 
+  // <CHANGE> Calculate absent students automatically - if no P or PR mark, they're absent by default
   roster.forEach((student) => {
     const records = attendance[student.id] || {};
-    Object.entries(records).forEach(([date, status]) => {
-      if (dateFrom && date < dateFrom) return;
-      if (dateTo && date > dateTo) return;
+    
+    // Get all dates for this student within the date range
+    const studentDates = Object.entries(records)
+      .filter(([date]) => {
+        if (dateFrom && date < dateFrom) return false;
+        if (dateTo && date > dateTo) return false;
+        return true;
+      });
 
-      if (!status) return;
+    if (studentDates.length === 0) return;
+
+    studentDates.forEach(([date, status]) => {
       dateSet.add(date);
-      if (counts[status] !== undefined) counts[status] += 1;
-      if (status === 'A') {
+      
+      // If student has P or PR, count it
+      if (status === 'P' || status === 'PR') {
+        counts[status] += 1;
+      } else {
+        // Otherwise, count as absent by default
+        counts.A += 1;
         if (!absentDetailsMap[student.id]) {
           absentDetailsMap[student.id] = { student, dates: [] };
         }
         absentDetailsMap[student.id].dates.push(date);
+      }
+    });
+  });
+
+  // Also add students who have NO attendance records for any date in the range as absent
+  const allDatesInRange = Array.from(dateSet);
+  roster.forEach((student) => {
+    const records = attendance[student.id] || {};
+    allDatesInRange.forEach((date) => {
+      if (!records[date]) {
+        // No record for this date = absent
+        counts.A += 1;
+        if (!absentDetailsMap[student.id]) {
+          absentDetailsMap[student.id] = { student, dates: [] };
+        }
+        if (!absentDetailsMap[student.id].dates.includes(date)) {
+          absentDetailsMap[student.id].dates.push(date);
+        }
       }
     });
   });
@@ -1321,7 +1340,7 @@ const exportAbsentExcel = (report, classId) => {
     Name: item.student.name,
     Phone: item.student.phone,
     'Alt Phone': item.student.altPhone,
-    'Days Absent': item.dates.join(', '),
+    'Days Absent': item.dates.map(d => humanDate(d)).join(', '),
   }));
   const sheet = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
@@ -1333,7 +1352,7 @@ const exportAbsentExcel = (report, classId) => {
   XLSX.writeFile(wb, `absent-${classId || 'class'}.xlsx`);
 };
 
-// Basic styles
+// ... styles object ...
 const styles = {
   container: {
     maxWidth: '1200px',
@@ -1722,3 +1741,4 @@ const styles = {
 };
 
 export default DashboardPage;
+
