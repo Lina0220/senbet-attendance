@@ -10,8 +10,14 @@ const ACTIONS = [
   { id: 'reports', label: 'Reports', copy: 'Monitor trends & ratios' },
 ];
 
-const statusOptions = [
+const markingStatusOptions = [
   { code: 'P', label: 'Present' },
+  { code: 'PR', label: 'Permission' },
+];
+
+const reportingStatusOptions = [
+  { code: 'P', label: 'Present' },
+  { code: 'A', label: 'Absent' },
   { code: 'PR', label: 'Permission' },
 ];
 
@@ -30,7 +36,6 @@ const DashboardPage = () => {
   const [uploadClass, setUploadClass] = useState(CLASS_CORRIDOR[0].id);
   const [editDraft, setEditDraft] = useState(null);
   const [toast, setToast] = useState('');
-  const [exportSheetName, setExportSheetName] = useState('attendance');
   const [reportDateFrom, setReportDateFrom] = useState('');
   const [reportDateTo, setReportDateTo] = useState('');
   const [selectedSearchStudent, setSelectedSearchStudent] = useState(null);
@@ -289,13 +294,14 @@ const DashboardPage = () => {
               >
                 <div style={{ cursor: 'pointer', flex: 1 }}>
                   <strong>{student.name}</strong>
+                  {/* <CHANGE> Added Amharic age label "እድሜ" */}
                   <div style={styles.meta}>
-                    {student.rollNumber} · {resolveClassLabel(student.classId)}
+                    እድሜ {student.age} · {resolveClassLabel(student.classId)}
                   </div>
                   <div style={styles.meta}>{student.phone}</div>
                 </div>
                 <div style={styles.buttonGroup}>
-                  {statusOptions.map((option) => (
+                  {markingStatusOptions.map((option) => (
                     <button
                       key={option.code}
                       onClick={(e) => {
@@ -717,7 +723,7 @@ const ClassSection = ({
                     </td>
                     <td style={styles.td}>
                       <div style={styles.buttonGroup}>
-                        {statusOptions.map((option) => (
+                        {markingStatusOptions.map((option) => (
                           <button
                             key={option.code}
                             onClick={() => onMark(student.id, option.code)}
@@ -1239,11 +1245,9 @@ const buildClassReport = (
   const dateSet = new Set();
   const absentDetailsMap = {};
 
-  // <CHANGE> Calculate absent students automatically - if no P or PR mark, they're absent by default
   roster.forEach((student) => {
     const records = attendance[student.id] || {};
-    
-    // Get all dates for this student within the date range
+
     const studentDates = Object.entries(records)
       .filter(([date]) => {
         if (dateFrom && date < dateFrom) return false;
@@ -1255,12 +1259,10 @@ const buildClassReport = (
 
     studentDates.forEach(([date, status]) => {
       dateSet.add(date);
-      
-      // If student has P or PR, count it
+
       if (status === 'P' || status === 'PR') {
         counts[status] += 1;
       } else {
-        // Otherwise, count as absent by default
         counts.A += 1;
         if (!absentDetailsMap[student.id]) {
           absentDetailsMap[student.id] = { student, dates: [] };
@@ -1270,13 +1272,11 @@ const buildClassReport = (
     });
   });
 
-  // Also add students who have NO attendance records for any date in the range as absent
   const allDatesInRange = Array.from(dateSet);
   roster.forEach((student) => {
     const records = attendance[student.id] || {};
     allDatesInRange.forEach((date) => {
       if (!records[date]) {
-        // No record for this date = absent
         counts.A += 1;
         if (!absentDetailsMap[student.id]) {
           absentDetailsMap[student.id] = { student, dates: [] };
@@ -1352,7 +1352,7 @@ const exportAbsentExcel = (report, classId) => {
   XLSX.writeFile(wb, `absent-${classId || 'class'}.xlsx`);
 };
 
-// ... styles object ...
+// Styles object
 const styles = {
   container: {
     maxWidth: '1200px',
@@ -1741,4 +1741,5 @@ const styles = {
 };
 
 export default DashboardPage;
+
 
